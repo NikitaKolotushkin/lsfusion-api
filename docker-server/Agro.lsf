@@ -1,0 +1,158 @@
+MODULE Agro;
+
+
+CLASS Crop 'Культура';
+name 'Наименование' = DATA ISTRING[100] (Crop) IN base;
+
+CLASS Field 'Поле';
+number 'Номер поля' = DATA STRING[20] (Field) IN base;
+area 'Площадь поля' = DATA NUMERIC[14,2] (Field) IN base;
+
+CLASS Employee 'Сотрудник';
+fullName 'ФИО' = DATA ISTRING[100] (Employee) IN base;
+
+CLASS Tractor 'Техника';
+brand 'Марка' = DATA ISTRING[50] (Tractor) IN base;
+stateNumber 'Гос. №' = DATA STRING[20] (Tractor) IN base;
+
+CLASS Implement 'Орудие';
+brand 'Марка' = DATA ISTRING[50] (Implement) IN base;
+
+
+CLASS WorkRecord 'Запись о работе';
+
+recordId 'ID' (WorkRecord r) = LONG(r);
+
+date 'Дата' = DATA DATE (WorkRecord);
+crop = DATA Crop (WorkRecord);
+cropSort 'Культура сорт' = DATA ISTRING[100] (WorkRecord);
+field = DATA Field (WorkRecord);
+fieldArea 'Площадь поля' = DATA NUMERIC[14,2] (WorkRecord);
+operationName 'Наименование операции' = DATA ISTRING[200] (WorkRecord);
+employee = DATA Employee (WorkRecord);
+tractorBrand 'Марка техники' = DATA ISTRING[50] (WorkRecord);
+tractorNumber 'Гос. №' = DATA STRING[20] (WorkRecord);
+implementBrand 'Марка с-х орудия' = DATA ISTRING[50] (WorkRecord);
+hectares 'га' = DATA NUMERIC[14,2] (WorkRecord);
+kgT 'кг,т' = DATA NUMERIC[14,2] (WorkRecord);
+remainingOnDeparture 'Остаток при выезде' = DATA NUMERIC[14,2] (WorkRecord);
+refueling 'Заправка' = DATA NUMERIC[14,2] (WorkRecord);
+remainingOnReturn 'Остаток при возвращении' = DATA NUMERIC[14,2] (WorkRecord);
+fuelConsumption 'Расход, литр' = DATA NUMERIC[14,2] (WorkRecord);
+fuelConsumptionPerHectare 'Расход на га, факт' = DATA NUMERIC[14,2] (WorkRecord);
+
+cropName (WorkRecord r) = name(crop(r));
+fieldNumber (WorkRecord r) = number(field(r));
+employeeName (WorkRecord r) = fullName(employee(r));
+
+
+FORM workRecords 'Записи о работе'
+    OBJECTS r = WorkRecord
+    PROPERTIES(r) READONLY recordId, date, cropName, cropSort, fieldNumber, fieldArea, 
+                 operationName, employeeName, tractorBrand, tractorNumber, 
+                 implementBrand, hectares, kgT, remainingOnDeparture, refueling,
+                 remainingOnReturn, fuelConsumption, fuelConsumptionPerHectare
+    PROPERTIES(r) NEWSESSION NEW, EDIT, DELETE
+;
+
+FORM workRecordsAPI 'API'
+    OBJECTS r = WorkRecord
+    PROPERTIES(r) recordId, date, cropName, cropSort, fieldNumber, fieldArea,
+                 operationName, employeeName, tractorBrand, tractorNumber,
+                 implementBrand, hectares, kgT, remainingOnDeparture, refueling,
+                 remainingOnReturn, fuelConsumption, fuelConsumptionPerHectare
+;
+
+NAVIGATOR {
+    NEW workRecords;
+}
+
+
+createWorkRecord (
+    DATE p_date, ISTRING[100] p_crop_name, ISTRING[100] p_crop_variety,
+    STRING[20] p_field_number, NUMERIC[14,2] p_field_area, ISTRING[200] p_operation_name,
+    ISTRING[100] p_employee_name, ISTRING[50] p_tractor_name, STRING[20] p_license_plate,
+    ISTRING[50] p_implement_name, NUMERIC[14,2] p_area_worked, NUMERIC[14,2] p_harvest_amount,
+    NUMERIC[14,2] p_fuel_start, NUMERIC[14,2] p_fuel_refill, NUMERIC[14,2] p_fuel_end
+) {
+    NEWSESSION {
+        LOCAL c = Crop ();
+        c() <- (GROUP MAX Crop cr IF name(cr) == p_crop_name);
+        IF NOT c() THEN { NEW cr = Crop { name(cr) <- p_crop_name; c() <- cr; } }
+        
+        LOCAL f = Field ();
+        f() <- (GROUP MAX Field fi IF number(fi) == p_field_number);
+        IF NOT f() THEN { NEW fi = Field { number(fi) <- p_field_number; area(fi) <- p_field_area; f() <- fi; } }
+
+        LOCAL e = Employee ();
+        e() <- (GROUP MAX Employee em IF fullName(em) == p_employee_name);
+        IF NOT e() THEN { NEW em = Employee { fullName(em) <- p_employee_name; e() <- em; } }
+
+        NEW r = WorkRecord {
+            date(r) <- p_date;
+            crop(r) <- c();
+            cropSort(r) <- p_crop_variety;
+            field(r) <- f();
+            fieldArea(r) <- p_field_area;
+            operationName(r) <- p_operation_name;
+            employee(r) <- e();
+            tractorBrand(r) <- p_tractor_name;
+            tractorNumber(r) <- p_license_plate;
+            implementBrand(r) <- p_implement_name;
+            hectares(r) <- p_area_worked;
+            kgT(r) <- p_harvest_amount;
+            remainingOnDeparture(r) <- p_fuel_start;
+            refueling(r) <- p_fuel_refill;
+            remainingOnReturn(r) <- p_fuel_end;
+            fuelConsumption(r) <- (p_fuel_start - p_fuel_end) + p_fuel_refill;
+            fuelConsumptionPerHectare(r) <- fuelConsumption(r) / p_area_worked IF p_area_worked != 0.0;
+            
+            APPLY;
+            EXPORT JSON FROM id = LONG(r), status = 'Created';
+        }
+    }
+}
+
+getWorkRecords() {
+    EXPORT workRecordsAPI JSON;
+}
+
+getWorkRecord(LONG p_id) {
+    // В 6.2 поиск по ID делаем через явную фильтрацию:
+    LOCAL r = WorkRecord ();
+    r() <- (GROUP MAX WorkRecord wr IF LONG(wr) == p_id); 
+    
+    IF r() THEN {
+        EXPORT workRecordsAPI OBJECTS r = r() JSON;
+    }
+}
+
+deleteWorkRecord (LONG p_id) {
+    NEWSESSION {
+        LOCAL r = WorkRecord ();
+        r() <- (GROUP MAX WorkRecord wr IF LONG(wr) == p_id);
+        IF r() THEN {
+            DELETE r();
+            APPLY;
+            EXPORT JSON FROM id = p_id, status = 'Deleted';
+        }
+    }
+}
+
+
+importWorkRecordsXLS 'Импортировать из XLS' ()  {
+    INPUT f = EXCELFILE DO {
+        LOCAL l_date = DATE (INTEGER);
+        LOCAL l_cropName = ISTRING[100] (INTEGER);
+        LOCAL l_hectares = NUMERIC[14,2] (INTEGER);
+
+        IMPORT XLS FROM f TO l_date = 'число', l_cropName = 'с/х культура', l_hectares = 'га';
+
+        FOR l_date(INTEGER i) NEW r = WorkRecord DO {
+            date(r) <- l_date(i);
+            hectares(r) <- l_hectares(i);
+        }
+        APPLY;
+    }
+}
+EXTEND FORM workRecords PROPERTIES() importWorkRecordsXLS;
