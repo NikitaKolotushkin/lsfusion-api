@@ -118,27 +118,18 @@ getWorkRecords() {
 }
 
 getWorkRecord(LONG p_id) {
-    // В 6.2 поиск по ID делаем через явную фильтрацию:
-    LOCAL r = WorkRecord ();
-    r() <- (GROUP MAX WorkRecord wr IF LONG(wr) == p_id); 
-    
-    IF r() THEN {
-        EXPORT workRecordsAPI OBJECTS r = r() JSON;
-    }
+    EXPORT workRecordsAPI FILTERS recordId(r) == p_id JSON;
 }
 
 deleteWorkRecord (LONG p_id) {
     NEWSESSION {
-        LOCAL r = WorkRecord ();
-        r() <- (GROUP MAX WorkRecord wr IF LONG(wr) == p_id);
-        IF r() THEN {
-            DELETE r();
-            APPLY;
-            EXPORT JSON FROM id = p_id, status = 'Deleted';
+        FOR WorkRecord wr IF recordId(wr) == p_id DO {
+            DELETE wr;
         }
+        APPLY;
+        EXPORT JSON FROM id = p_id, status = 'Deleted';
     }
 }
-
 
 importWorkRecordsXLS 'Импортировать из XLS' ()  {
     INPUT f = EXCELFILE DO {
