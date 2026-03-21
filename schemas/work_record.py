@@ -73,13 +73,13 @@ class WorkRecordResponse(WorkRecordBase):
 
 
 class WorkRecordListResponse(BaseModel):
-    items: List[WorkRecordResponse]
+    results: List[WorkRecordResponse]
     total: int
     
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "items": [],
+                "results": [],
                 "total": 0
             }
         }
