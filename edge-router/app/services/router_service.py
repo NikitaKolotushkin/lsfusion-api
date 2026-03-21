@@ -66,7 +66,6 @@ class RouterService:
         
         return data
 
-
     async def _request(self, action: str, params: dict | None = None) -> Any:
         url = f"{self.lsf_server_url}/exec"
         query_params = {"action": f"{self.lsf_module}.{action}"}
@@ -109,7 +108,7 @@ class RouterService:
         result = await self._request("getWorkRecords")
         items_raw = result.get("r", [])
         items = [self._calculate_fuel(self._map_lsfusion_to_schema(item)) for item in items_raw if item.get("recordId")]
-        return {"items": items, "total": len(items)}
+        return {"results": items, "total": len(items)}
 
     async def get_work_record(self, record_id: int) -> dict:
         result = await self._request("getWorkRecord", {"p_id": record_id})
