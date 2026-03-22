@@ -121,13 +121,14 @@ getWorkRecord(LONG p_id) {
     EXPORT workRecordsAPI FILTERS recordId(r) == p_id JSON;
 }
 
-deleteWorkRecord (LONG p_id) {
+// Указываем, что параметром является сам объект класса WorkRecord
+deleteWorkRecord (WorkRecord r) {
     NEWSESSION {
-        FOR WorkRecord wr IF recordId(wr) == p_id DO {
-            DELETE wr;
+        // Проверяем, существует ли объект, и удаляем его напрямую
+        IF r IS WorkRecord THEN {
+            DELETE r;
+            APPLY;
         }
-        APPLY;
-        EXPORT JSON FROM id = p_id, status = 'Deleted';
     }
 }
 
