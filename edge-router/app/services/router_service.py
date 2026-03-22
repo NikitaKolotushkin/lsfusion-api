@@ -119,5 +119,5 @@ class RouterService:
         return self._calculate_fuel(self._map_lsfusion_to_schema(items[0]))
 
     async def delete_work_record(self, record_id: int) -> dict:
-        await self._request("deleteWorkRecord", {"p_id": record_id})
+        await self._request("deleteWorkRecord", {"r": record_id})
         return {"status": "deleted", "id": record_id}
