@@ -1,0 +1,73 @@
+name: lsfapi
+
+services:
+
+  edge-router:
+    container_name: edge-router
+    build: 
+      context: ./edge-router
+    networks:
+      - lsf-network
+    ports:
+      - "8000:8000"
+    env_file:
+      - app.env
+    volumes:
+      - ./config:/app/app/config
+      - ./schemas:/app/app/schemas
+
+  db:
+    image: postgres:latest
+    networks:
+      - lsf-network
+    volumes:
+      - ./docker-db:/var/lib/postgresql
+    environment:
+      - POSTGRES_PASSWORD=11111
+    env_file:
+      - app.env
+
+  # logics:
+  #   image: lsfusion/mycompany:6.2-SNAPSHOT
+  #   volumes:
+  #     - ./docker-server:/lsfusion
+
+  server:
+    container_name: server
+    image: lsfusion/server:6.2-SNAPSHOT
+    networks:
+      - lsf-network
+    ports:
+      - "7651:7651"
+    depends_on:
+      db:
+        condition: service_started
+      # logics:
+      #   condition: service_completed_successfully
+    volumes:
+      - ./docker-server:/lsfusion
+    environment:
+      - DB_SERVER=db
+      - DB_PASSWORD=11111
+    env_file:
+      - app.env
+
+  client:
+    image: lsfusion/client:6.2-SNAPSHOT
+    networks:
+      - lsf-network
+    depends_on:
+      - server
+    volumes:
+      - ./docker-client-conf:/usr/local/tomcat/conf/Catalina
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_SERVER=server
+    env_file:
+      - app.env
+
+
+networks:
+  lsf-network:
+    name: lsf_network
