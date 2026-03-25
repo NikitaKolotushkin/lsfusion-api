@@ -1,3 +1,5 @@
+.DS_STORE
+
 docker-server/logs/
 docker-db/
 
