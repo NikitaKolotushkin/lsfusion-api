@@ -5,6 +5,7 @@ import os
 
 import app.schemas.work_record as schemas_work_record
 import app.schemas.field as schemas_field
+import app.schemas.machinery as schemas_machinery
 
 from httpx import HTTPStatusError
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -141,6 +142,73 @@ async def update_field(request: Request, field_id: int, field: schemas_field.Fie
 async def delete_field(request: Request, field_id: int):
     try:
         await router_service.delete_field(field_id)
+        return Response(status_code=204)
+    except HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# MACHINERY
+
+@router.post('/machinery/', response_model=schemas_machinery.MachineryResponse, status_code=201, tags=["Machinery"])
+async def create_machinery(request: Request, machinery: schemas_machinery.MachineryCreate):
+    try:
+        machinery_data = await router_service.create_machinery(machinery)
+        return machinery_data
+    except HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/machinery/', response_model=schemas_machinery.MachineryListResponse, tags=["Machinery"])
+async def get_machineries(request: Request):
+    try:
+        machineries_data = await router_service.get_all_machinery()
+        return machineries_data
+    except HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/machinery/{machinery_id}', response_model=schemas_machinery.MachineryResponse, tags=["Machinery"])
+async def get_machinery(request: Request, machinery_id: str):
+    try:
+        machinery_data = await router_service.get_machinery(machinery_id)
+        return machinery_data
+    except HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put('/machinery/{machinery_id}', response_model=schemas_machinery.MachineryResponse, tags=["Machinery"])
+async def update_machinery(request: Request, machinery_id: str, machinery: schemas_machinery.MachineryCreate):
+    try:
+        machinery_data = await router_service.update_machinery(machinery_id, machinery)
+        return machinery_data
+    except HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete('/machinery/{machinery_id}', status_code=204, tags=["Machinery"])
+async def delete_machinery(request: Request, machinery_id: str):
+    try:
+        await router_service.delete_machinery(machinery_id)
         return Response(status_code=204)
     except HTTPStatusError as e:
         raise HTTPException(status_code=e.response.status_code, detail=str(e))

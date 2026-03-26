@@ -1,0 +1,174 @@
+MODULE Machinery;
+
+REQUIRE Time, Utils;
+
+
+CLASS FunctionalClass 'Функциональный класс' {
+    m1 'M1',
+    m2 'M2',
+    m3 'M3'
+}
+name 'Наименование' (FunctionalClass c) = staticCaption(c) IF c IS FunctionalClass;
+
+CLASS TechType 'Технологический тип' {
+    tes 'ТЭС',
+    stk 'СТК',
+    amo 'АМО',
+    rbs 'РБС'
+}
+name 'Наименование' (TechType t) = staticCaption(t) IF t IS TechType;
+
+
+CLASS Machinery 'Техника';
+
+id 'ID' = DATA STRING[50] (Machinery) INDEXED;
+machineryInternalId 'Внутренний ID' (Machinery m) = LONG(m);
+
+inventoryNumber 'Инвентарный номер' = DATA STRING[100] (Machinery) INDEXED;
+modelName 'Название модели' = DATA ISTRING[100] (Machinery) NONULL;
+manufacturer 'Производитель' = DATA ISTRING[100] (Machinery);
+
+functionalClass = DATA FunctionalClass (Machinery);
+functionalClassName 'Ф. класс' (Machinery m) = name(functionalClass(m));
+
+techType = DATA TechType (Machinery);
+techTypeName 'Т. тип' (Machinery m) = name(techType(m));
+
+tractionClassTs 'Тяговый класс' = DATA NUMERIC[3,1] (Machinery);
+enginePowerHp 'Мощность (л.с.)' = DATA INTEGER (Machinery);
+operatingWeightT 'Масса (т)' = DATA NUMERIC[5,2] (Machinery);
+workingWidthM 'Ширина захвата (м)' = DATA NUMERIC[4,2] (Machinery);
+
+hopperVolumeM3 'Объем бункера (м3)' = DATA NUMERIC[5,2] (Machinery);
+maxThroughputKgS 'Макс. пропускная способность (кг/с)' = DATA NUMERIC[5,2] (Machinery);
+payloadCapacityT 'Грузоподъемность (т)' = DATA NUMERIC[5,2] (Machinery);
+
+currentStatus 'Статус' = DATA STRING[20] (Machinery);
+totalOperatingHours 'Моточасы' = DATA NUMERIC[10,1] (Machinery);
+currentLat 'Широта' = DATA DOUBLE (Machinery);
+currentLon 'Долгота' = DATA DOUBLE (Machinery);
+currentFuelLevelPercent 'Уровень топлива (%)' = DATA NUMERIC[5,2] (Machinery);
+
+vibrationThresholdMs2 'Порог вибрации (м/с2)' = DATA DOUBLE (Machinery);
+predictedFailureProb 'Вер. отказа (P_est)' = DATA NUMERIC[3,2] (Machinery);
+
+isobusEnabled 'ISOBUS включен' = DATA BOOLEAN (Machinery);
+lastTelemetrySync 'Последняя синхронизация' = DATA DATETIME (Machinery);
+updatedAt 'Дата обновления' = DATA DATETIME (Machinery);
+
+
+WHEN SET(Machinery m IS Machinery) DO {
+    currentStatus(m) <- 'ready' IF NOT currentStatus(m);
+    vibrationThresholdMs2(m) <- 40.0 IF NOT vibrationThresholdMs2(m);
+    predictedFailureProb(m) <- 0.0 IF NOT predictedFailureProb(m);
+}
+
+WHEN CHANGED(currentStatus(Machinery m)) OR CHANGED(totalOperatingHours(m)) OR 
+     CHANGED(currentLat(m)) OR CHANGED(currentLon(m)) OR 
+     CHANGED(currentFuelLevelPercent(m)) OR CHANGED(predictedFailureProb(m)) DO {
+    updatedAt(m) <- currentDateTime();
+}
+
+
+FORM machineryList 'Реестр техники'
+    OBJECTS m = Machinery
+    PROPERTIES(m) READONLY machineryInternalId, id, inventoryNumber, modelName, functionalClassName, techTypeName
+    PROPERTIES(m) currentStatus, totalOperatingHours, currentFuelLevelPercent, predictedFailureProb
+    PROPERTIES(m) NEWSESSION NEW, EDIT, DELETE
+;
+
+FORM machineryAPI 'Machinery API'
+    OBJECTS m = Machinery
+    PROPERTIES(m) machineryInternalId, id, inventoryNumber, modelName, manufacturer,
+                 functionalClassName, techTypeName, tractionClassTs, enginePowerHp,
+                 operatingWeightT, workingWidthM, hopperVolumeM3, maxThroughputKgS,
+                 payloadCapacityT, currentStatus, totalOperatingHours, currentLat,
+                 currentLon, currentFuelLevelPercent, vibrationThresholdMs2,
+                 predictedFailureProb, isobusEnabled, lastTelemetrySync, updatedAt
+;
+
+
+createMachinery (
+    STRING[50] p_id, STRING[100] p_inv, ISTRING[100] p_model, 
+    STRING[10] p_f_class, STRING[10] p_t_type, NUMERIC[3,1] p_traction,
+    INTEGER p_power, NUMERIC[5,2] p_weight, NUMERIC[4,2] p_width,
+    NUMERIC[5,2] p_hopper, NUMERIC[5,2] p_throughput, NUMERIC[5,2] p_payload
+) {
+    NEWSESSION {
+        LOCAL m = Machinery ();
+        m() <- (GROUP MAX Machinery ma IF id(ma) == p_id);
+        
+        IF NOT m() THEN {
+            NEW ma = Machinery {
+                id(ma) <- p_id;
+                m() <- ma;
+            }
+        }
+        
+        FOR Machinery ma == m() DO {
+            inventoryNumber(ma) <- p_inv;
+            modelName(ma) <- p_model;
+            functionalClass(ma) <- (GROUP MAX FunctionalClass c IF staticCaption(c) == p_f_class);
+            techType(ma) <- (GROUP MAX TechType t IF staticCaption(t) == p_t_type);
+            
+            tractionClassTs(ma) <- p_traction;
+            enginePowerHp(ma) <- p_power;
+            operatingWeightT(ma) <- p_weight;
+            workingWidthM(ma) <- p_width;
+            hopperVolumeM3(ma) <- p_hopper;
+            maxThroughputKgS(ma) <- p_throughput;
+            payloadCapacityT(ma) <- p_payload;
+        }
+        
+        APPLY;
+        EXPORT JSON FROM id = p_id, lsf_id = LONG(m()), status = 'Saved';
+    }
+}
+
+getMachineries() {
+    EXPORT machineryAPI JSON;
+}
+
+getMachinery(STRING[50] p_id) {
+    EXPORT machineryAPI FILTERS id(m) == p_id JSON;
+}
+
+deleteMachinery (STRING[50] p_id) {
+    NEWSESSION {
+        FOR id(Machinery m) == p_id DO {
+            DELETE m;
+        }
+        APPLY;
+    }
+}
+
+
+importMachineryXLS 'Импортировать технику (XLS)' () {
+    INPUT f = EXCELFILE DO {
+        LOCAL l_id = STRING[50] (INTEGER);
+        LOCAL l_model = ISTRING[100] (INTEGER);
+        LOCAL l_inv = STRING[100] (INTEGER);
+
+        IMPORT XLS FROM f TO l_id = 'ID', l_model = 'Модель', l_inv = 'ИнвНомер';
+
+        FOR l_id(INTEGER i) DO {
+            LOCAL m_obj = Machinery();
+            m_obj() <- (GROUP MAX Machinery ma IF id(ma) == l_id(i));
+            IF NOT m_obj() THEN {
+                NEW ma = Machinery {
+                    id(ma) <- l_id(i);
+                    m_obj() <- ma;
+                }
+            }
+            modelName(m_obj()) <- l_model(i);
+            inventoryNumber(m_obj()) <- l_inv(i);
+        }
+        APPLY;
+    }
+}
+
+EXTEND FORM machineryList PROPERTIES() importMachineryXLS;
+
+NAVIGATOR {
+    NEW machineryList;
+}
