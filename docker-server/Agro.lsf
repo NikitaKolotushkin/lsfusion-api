@@ -121,7 +121,6 @@ getWorkRecord(LONG p_id) {
     EXPORT workRecordsAPI FILTERS recordId(r) == p_id JSON;
 }
 
-// Указываем, что параметром является сам объект класса WorkRecord
 deleteWorkRecord (WorkRecord r) {
     NEWSESSION {
         // Проверяем, существует ли объект, и удаляем его напрямую

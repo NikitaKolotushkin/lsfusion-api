@@ -5,10 +5,11 @@ import os
 import httpx
 import base64
 import logging
-from typing import Any
+from typing import Any, Optional
 
 import app.schemas.work_record as schemas_work_record
-from fastapi import HTTPException, status
+import app.schemas.field as schemas_field  # Импортируем новые схемы
+from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -19,18 +20,20 @@ class RouterService:
         self.lsf_username = os.getenv("LSF_USERNAME", "admin")
         self.lsf_password = os.getenv("LSF_PASSWORD", "")
         
-        self.lsf_module = os.getenv("LSF_MODULE", "Agro")
+        self.agro_module = os.getenv("LSF_AGRO_MODULE", "Agro")
+        self.fields_module = os.getenv("LSF_FIELDS_MODULE", "Fields")
+        
         self._timeout = 30.0
         self._auth_headers = self._get_auth_headers()
         
-        logger.info(f"LSFusion Server: {self.lsf_server_url} (Module: {self.lsf_module})")
+        logger.info(f"LSFusion Server: {self.lsf_server_url}")
 
     def _get_auth_headers(self) -> dict:
         credentials = f"{self.lsf_username}:{self.lsf_password}"
         encoded = base64.b64encode(credentials.encode()).decode()
         return {"Authorization": f"Basic {encoded}"}
 
-    def _map_lsfusion_to_schema(self, item: dict) -> dict:
+    def _map_lsfusion_to_work_schema(self, item: dict) -> dict:
         return {
             "id": item.get("recordId"),
             "date": item.get("date"),
@@ -63,12 +66,27 @@ class RouterService:
             worked = data.get("area_worked") or 1
             if worked > 0:
                 data["fuel_per_hectare"] = round(data["fuel_consumed"] / worked, 2)
-        
         return data
 
-    async def _request(self, action: str, params: dict | None = None) -> Any:
+    def _map_lsfusion_to_field_schema(self, item: dict) -> dict:
+        return {
+            "id": item.get("fieldId"),
+            "name": item.get("name"),
+            "geometry": item.get("geometry"),
+            "area_ha": item.get("areaHa"),
+            "crop_name": item.get("cropName"),
+            "soil_type": item.get("soilType"),
+            "current_moisture": item.get("currentMoisture"),
+            "status": item.get("status"),
+            "created_at": item.get("createdAt"),
+            "updated_at": item.get("updatedAt"),
+        }
+
+    async def _request(self, action: str, params: dict | None = None, module: str = None) -> Any:
+        target_module = module or self.agro_module
         url = f"{self.lsf_server_url}/exec"
-        query_params = {"action": f"{self.lsf_module}.{action}"}
+        query_params = {"action": f"{target_module}.{action}"}
+        
         if params:
             query_params.update(params)
         
@@ -77,6 +95,8 @@ class RouterService:
             if response.status_code != 200:
                 raise HTTPException(status_code=response.status_code, detail=f"LSF Error: {response.text}")
             return response.json() if response.text.strip() else {}
+
+    # WORK RECORDS
 
     async def create_work_record(self, work_record: schemas_work_record.WorkRecordCreate) -> dict:
         params = {
@@ -96,28 +116,64 @@ class RouterService:
             "p_fuel_refill": str(work_record.fuel_refill),
             "p_fuel_end": str(work_record.fuel_end),
         }
-        result = await self._request("createWorkRecord", params)
-
-        response_data = {
-            "id": result.get("id", 0),
-            **work_record.model_dump(),
-        }
+        result = await self._request("createWorkRecord", params, module=self.agro_module)
+        response_data = {"id": result.get("id", 0), **work_record.model_dump()}
         return self._calculate_fuel(response_data)
 
     async def get_all_work_records(self) -> dict:
-        result = await self._request("getWorkRecords")
+        result = await self._request("getWorkRecords", module=self.agro_module)
         items_raw = result.get("r", [])
-        items = [self._calculate_fuel(self._map_lsfusion_to_schema(item)) for item in items_raw if item.get("recordId")]
+        items = [
+            self._calculate_fuel(self._map_lsfusion_to_work_schema(item)) 
+            for item in items_raw if item.get("recordId")
+        ]
         return {"results": items, "total": len(items)}
 
     async def get_work_record(self, record_id: int) -> dict:
-        result = await self._request("getWorkRecord", {"p_id": record_id})
+        result = await self._request("getWorkRecord", {"p_id": record_id}, module=self.agro_module)
         items = result.get("r", [])
         if not items:
             raise HTTPException(status_code=404, detail="Запись не найдена")
-        
-        return self._calculate_fuel(self._map_lsfusion_to_schema(items[0]))
+        return self._calculate_fuel(self._map_lsfusion_to_work_schema(items[0]))
 
     async def delete_work_record(self, record_id: int) -> dict:
-        await self._request("deleteWorkRecord", {"r": record_id})
+        await self._request("deleteWorkRecord", {"r": record_id}, module=self.agro_module)
         return {"status": "deleted", "id": record_id}
+
+    # FIELDS
+
+    async def create_field(self, field: schemas_field.FieldCreate) -> dict:
+        params = {
+            "p_name": field.name,
+            "p_area": str(field.area_ha),
+            "p_geometry": field.geometry or "",
+            "p_crop": field.crop_name or "",
+            "p_soil": field.soil_type or "",
+            "p_moisture": str(field.current_moisture),
+        }
+        result = await self._request("createField", params, module=self.fields_module)
+        
+        return {
+            "id": result.get("id", 0),
+            **field.model_dump()
+        }
+
+    async def get_all_fields(self) -> dict:
+        result = await self._request("getFields", module=self.fields_module)
+        items_raw = result.get("f", [])
+        items = [self._map_lsfusion_to_field_schema(item) for item in items_raw if item.get("fieldId")]
+        return {"results": items, "total": len(items)}
+
+    async def get_field(self, field_id: int) -> dict:
+        result = await self._request("getField", {"p_id": field_id}, module=self.fields_module)
+        items = result.get("f", [])
+        if not items:
+            raise HTTPException(status_code=404, detail="Поле не найдено")
+        return self._map_lsfusion_to_field_schema(items[0])
+
+    async def delete_field(self, field_id: int) -> dict:
+        await self._request("deleteField", {"f": field_id}, module=self.fields_module)
+        return {"status": "deleted", "id": field_id}
+
+    async def update_field(self, field_id: int, field: schemas_field.FieldCreate) -> dict:
+        return await self.create_field(field)

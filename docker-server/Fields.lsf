@@ -1,0 +1,110 @@
+MODULE Fields;
+
+REQUIRE Time, Utils;
+
+
+CLASS Field 'Поле';
+
+fieldId 'ID' (Field f) = LONG(f);
+
+name 'Наименование' = DATA ISTRING[100] (Field) IN base;
+
+geometry 'Геометрия (WKT)' = DATA TEXT (Field);
+
+areaHa 'Площадь (га)' = DATA NUMERIC[10,2] (Field) IN base;
+cropName 'Культура' = DATA ISTRING[50] (Field) IN base;
+soilType 'Тип почвы' = DATA ISTRING[50] (Field) IN base;
+
+currentMoisture 'Влажность (%)' = DATA NUMERIC[4,1] (Field);
+
+status 'Статус' = DATA STRING[20] (Field);
+createdAt 'Дата создания' = DATA DATETIME (Field);
+updatedAt 'Дата обновления' = DATA DATETIME (Field);
+
+
+WHEN SET(Field f IS Field) DO {
+    createdAt(f) <- currentDateTime();
+    status(f) <- 'idle' IF NOT status(f);
+}
+
+WHEN CHANGED(name(Field f)) OR CHANGED(geometry(f)) OR CHANGED(areaHa(f)) OR 
+     CHANGED(cropName(f)) OR CHANGED(soilType(f)) OR CHANGED(currentMoisture(f)) OR 
+     CHANGED(status(f)) DO {
+    updatedAt(f) <- currentDateTime();
+}
+
+
+FORM fields 'Реестр полей'
+    OBJECTS f = Field
+    PROPERTIES(f) READONLY fieldId, createdAt, updatedAt
+    PROPERTIES(f) name, areaHa, cropName, soilType, currentMoisture, status, geometry
+    PROPERTIES(f) NEWSESSION NEW, EDIT, DELETE
+;
+
+FORM fieldsAPI 'Fields API'
+    OBJECTS f = Field
+    PROPERTIES(f) fieldId, name, areaHa, cropName, soilType, currentMoisture, status, geometry, createdAt, updatedAt
+;
+
+NAVIGATOR {
+    NEW fields;
+}
+
+
+createField (
+    ISTRING[100] p_name, NUMERIC[10,2] p_area, TEXT p_geometry, 
+    ISTRING[50] p_crop, ISTRING[50] p_soil, NUMERIC[4,1] p_moisture
+) {
+    NEWSESSION {
+        NEW f = Field {
+            name(f) <- p_name;
+            areaHa(f) <- p_area;
+            geometry(f) <- p_geometry;
+            cropName(f) <- p_crop;
+            soilType(f) <- p_soil;
+            currentMoisture(f) <- p_moisture;
+            
+            APPLY;
+            EXPORT JSON FROM id = LONG(f), status = 'Created';
+        }
+    }
+}
+
+getFields() {
+    EXPORT fieldsAPI JSON;
+}
+
+getField(LONG p_id) {
+    EXPORT fieldsAPI FILTERS fieldId(f) == p_id JSON;
+}
+
+deleteField (Field f) {
+    NEWSESSION {
+        IF f IS Field THEN {
+            DELETE f;
+            APPLY;
+        }
+    }
+}
+
+
+importFieldsXLS 'Импортировать поля (XLS)' () {
+    INPUT f = EXCELFILE DO {
+        LOCAL l_name = ISTRING[100] (INTEGER);
+        LOCAL l_area = NUMERIC[10,2] (INTEGER);
+        LOCAL l_crop = ISTRING[50] (INTEGER);
+        LOCAL l_soil = ISTRING[50] (INTEGER);
+
+        IMPORT XLS FROM f TO l_name = 'Наименование', l_area = 'Площадь', l_crop = 'Культура', l_soil = 'Почва';
+
+        FOR l_name(INTEGER i) NEW nf = Field DO {
+            name(nf) <- l_name(i);
+            areaHa(nf) <- l_area(i);
+            cropName(nf) <- l_crop(i);
+            soilType(nf) <- l_soil(i);
+        }
+        APPLY;
+    }
+}
+
+EXTEND FORM fields PROPERTIES() importFieldsXLS;
