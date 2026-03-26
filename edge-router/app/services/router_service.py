@@ -213,8 +213,22 @@ class RouterService:
             "p_id": machinery.id,
             "p_inv": machinery.inventory_number or "",
             "p_model": machinery.model_name,
+            "p_manuf": machinery.manufacturer or "",
             "p_f_class": machinery.f_class.value if machinery.f_class else "",
-            "p_t_type": machinery.t_type.value if machinery.t_type else ""
+            "p_t_type": machinery.t_type.value if machinery.t_type else "",
+            "p_traction": str(machinery.traction_class_ts or 0),
+            "p_power": str(machinery.engine_power_hp or 0),
+            "p_weight": str(machinery.operating_weight_t or 0),
+            "p_width": str(machinery.working_width_m or 0),
+            "p_hopper": str(getattr(machinery, 'hopper_volume_m3', 0) or 0),
+            "p_throughput": str(getattr(machinery, 'max_throughput_kg_s', 0) or 0),
+            "p_payload": str(getattr(machinery, 'payload_capacity_t', 0) or 0),
+            
+            "p_lat": str(machinery.current_lat) if machinery.current_lat is not None else "",
+            "p_lon": str(machinery.current_lon) if machinery.current_lon is not None else "",
+            
+            "p_sync": machinery.last_telemetry_sync.strftime("%d.%m.%Y %H:%M:%S") if getattr(machinery, 'last_telemetry_sync', None) else "",
+            "p_hours": str(machinery.total_operating_hours or 0)
         }
 
         result = await self._request("createMachinery", params, module=self.machinery_module)

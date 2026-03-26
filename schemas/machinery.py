@@ -34,17 +34,21 @@ class MachineryBase(BaseModel):
     operating_weight_t: Optional[float] = Field(None, ge=0)
     working_width_m: Optional[float] = Field(None, ge=0)
     
+    hopper_volume_m3: Optional[float] = Field(None, ge=0)
+    max_throughput_kg_s: Optional[float] = Field(None, ge=0)
+    payload_capacity_t: Optional[float] = Field(None, ge=0)
+
     current_status: Optional[str] = "ready"
     total_operating_hours: Optional[float] = Field(default=0.0, ge=0)
     current_lat: Optional[float] = None
     current_lon: Optional[float] = None
     current_fuel_level_percent: Optional[float] = Field(default=0.0, ge=0, le=100) 
     
-
     vibration_threshold_ms2: Optional[float] = 40.0
     predicted_failure_prob: Optional[float] = Field(default=0.0, ge=0, le=1.0)
-    
     isobus_enabled: Optional[bool] = False 
+    
+    last_telemetry_sync: Optional[datetime] = None
 
 
 class MachineryCreate(MachineryBase):
@@ -52,8 +56,7 @@ class MachineryCreate(MachineryBase):
 
 
 class MachineryResponse(MachineryBase):
-    lsf_id: Optional[int] = Field(None, alias="lsf_id", description="Внутренний ID LSFusion")
-    last_telemetry_sync: Optional[datetime] = None
+    lsf_id: Optional[int] = Field(None, alias="lsf_id")
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(

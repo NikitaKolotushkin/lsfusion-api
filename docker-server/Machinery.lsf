@@ -90,24 +90,24 @@ FORM machineryAPI 'Machinery API'
 
 createMachinery (
     STRING[50] p_id, STRING[100] p_inv, ISTRING[100] p_model, 
-    STRING[10] p_f_class, STRING[10] p_t_type, NUMERIC[3,1] p_traction,
-    INTEGER p_power, NUMERIC[5,2] p_weight, NUMERIC[4,2] p_width,
-    NUMERIC[5,2] p_hopper, NUMERIC[5,2] p_throughput, NUMERIC[5,2] p_payload
+    ISTRING[100] p_manuf, STRING[10] p_f_class, STRING[10] p_t_type, 
+    NUMERIC[3,1] p_traction, INTEGER p_power, NUMERIC[5,2] p_weight, 
+    NUMERIC[4,2] p_width, NUMERIC[5,2] p_hopper, NUMERIC[5,2] p_throughput, 
+    NUMERIC[5,2] p_payload,
+    DOUBLE p_lat, DOUBLE p_lon, DATETIME p_sync, NUMERIC[10,1] p_hours
 ) {
     NEWSESSION {
         LOCAL m = Machinery ();
         m() <- (GROUP MAX Machinery ma IF id(ma) == p_id);
         
         IF NOT m() THEN {
-            NEW ma = Machinery {
-                id(ma) <- p_id;
-                m() <- ma;
-            }
+            NEW ma = Machinery { id(ma) <- p_id; m() <- ma; }
         }
         
         FOR Machinery ma == m() DO {
             inventoryNumber(ma) <- p_inv;
             modelName(ma) <- p_model;
+            manufacturer(ma) <- p_manuf;
             functionalClass(ma) <- (GROUP MAX FunctionalClass c IF staticCaption(c) == p_f_class);
             techType(ma) <- (GROUP MAX TechType t IF staticCaption(t) == p_t_type);
             
@@ -115,11 +115,12 @@ createMachinery (
             enginePowerHp(ma) <- p_power;
             operatingWeightT(ma) <- p_weight;
             workingWidthM(ma) <- p_width;
-            hopperVolumeM3(ma) <- p_hopper;
-            maxThroughputKgS(ma) <- p_throughput;
-            payloadCapacityT(ma) <- p_payload;
+            
+            currentLat(ma) <- p_lat;
+            currentLon(ma) <- p_lon;
+            lastTelemetrySync(ma) <- p_sync;
+            totalOperatingHours(ma) <- p_hours;
         }
-        
         APPLY;
         EXPORT JSON FROM id = p_id, lsf_id = LONG(m()), status = 'Saved';
     }
