@@ -49,6 +49,8 @@ services:
     environment:
       - DB_SERVER=db
       - DB_PASSWORD=11111
+      - USER_SETLANGUAGE=ru
+      - USER_SETCOUNTRY=RU 
     env_file:
       - app.env
 
